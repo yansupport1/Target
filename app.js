@@ -416,7 +416,7 @@
 
     try {
       const model = getModelById(chat.modelId);
-      const replyText = await callGeminiAPI(model, chat.messages);
+      const replyText = await callAI(model, chat.messages);
 
       chat.messages.push({ role: "ai", text: replyText });
       chat.updatedAt = Date.now();
@@ -435,10 +435,59 @@
     }
   }
 
-  async function callGeminiAPI(model, messages) {
-    const url = `${AI_CONFIG.BASE_URL}/${model.apiModel}:generateContent?key=${AI_CONFIG.API_KEY}`;
+  /**
+   * Dispatcher utama: baca provider dari model, lalu panggil
+   * fungsi yang sesuai. Nambah provider baru di config.js otomatis
+   * kepakai selama type-nya salah satu dari: gemini, openai-compatible,
+   * anthropic. Type baru bisa ditambah dengan nambah case baru di bawah.
+   */
+  async function callAI(model, messages) {
+    const providerCfg = AI_CONFIG.PROVIDERS[model.provider];
+    if (!providerCfg) {
+      throw new Error(`Provider "${model.provider}" belum ada di PROVIDERS (config.js).`);
+    }
 
-    // Konversi riwayat pesan ke format Gemini (user / model)
+    const apiKey = (model.apiKey && model.apiKey.trim()) || AI_CONFIG.PROVIDER_KEYS[model.provider] || "";
+    if (!apiKey) {
+      throw new Error(`API key untuk provider "${model.provider}" belum diisi di config.js.`);
+    }
+
+    switch (providerCfg.type) {
+      case "gemini":
+        return callGemini(providerCfg, model, messages, apiKey);
+      case "openai-compatible":
+        return callOpenAICompatible(providerCfg, model, messages, apiKey);
+      case "anthropic":
+        return callAnthropic(providerCfg, model, messages, apiKey);
+      default:
+        throw new Error(`Tipe provider "${providerCfg.type}" belum didukung di app.js.`);
+    }
+  }
+
+  async function safeFetchJson(url, options) {
+    let res;
+    try {
+      res = await fetch(url, options);
+    } catch (networkErr) {
+      throw new Error("Tidak bisa terhubung ke server AI. Periksa koneksi internet kamu.");
+    }
+    let data;
+    try {
+      data = await res.json();
+    } catch (e) {
+      throw new Error("Respons dari server AI tidak valid.");
+    }
+    if (!res.ok) {
+      const apiMsg = (data && data.error && (data.error.message || data.error)) || `HTTP ${res.status}`;
+      throw new Error(`AI API error: ${typeof apiMsg === "string" ? apiMsg : JSON.stringify(apiMsg)}`);
+    }
+    return data;
+  }
+
+  /* ---- Provider: Gemini (native) ---- */
+  async function callGemini(providerCfg, model, messages, apiKey) {
+    const url = `${providerCfg.baseUrl}/${model.apiModel}:generateContent?key=${apiKey}`;
+
     const contents = messages.map((m) => ({
       role: m.role === "ai" ? "model" : "user",
       parts: [{ text: m.text }],
@@ -446,42 +495,79 @@
 
     const body = {
       contents,
-      systemInstruction: {
-        parts: [{ text: AI_CONFIG.SYSTEM_INSTRUCTION }],
-      },
+      systemInstruction: { parts: [{ text: AI_CONFIG.SYSTEM_INSTRUCTION }] },
     };
 
-    let res;
-    try {
-      res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-    } catch (networkErr) {
-      throw new Error("Tidak bisa terhubung ke server AI. Periksa koneksi internet kamu.");
-    }
-
-    let data;
-    try {
-      data = await res.json();
-    } catch (e) {
-      throw new Error("Respons dari server AI tidak valid.");
-    }
-
-    if (!res.ok) {
-      const apiMsg = data && data.error && data.error.message ? data.error.message : `HTTP ${res.status}`;
-      throw new Error(`AI API error: ${apiMsg}`);
-    }
+    const data = await safeFetchJson(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
 
     const candidate = data && data.candidates && data.candidates[0];
     const parts = candidate && candidate.content && candidate.content.parts;
     const answer = parts && parts.map((p) => p.text || "").join("").trim();
 
-    if (!answer) {
-      throw new Error("AI tidak mengembalikan jawaban. Coba lagi.");
-    }
+    if (!answer) throw new Error("AI tidak mengembalikan jawaban. Coba lagi.");
     return answer;
+  }
+
+  /* ---- Provider: OpenAI-compatible (OpenAI, Groq, OpenRouter, DeepSeek, dll) ---- */
+  async function callOpenAICompatible(providerCfg, model, messages, apiKey) {
+    const chatMessages = [
+      { role: "system", content: AI_CONFIG.SYSTEM_INSTRUCTION },
+      ...messages.map((m) => ({
+        role: m.role === "ai" ? "assistant" : "user",
+        content: m.text,
+      })),
+    ];
+
+    const body = { model: model.apiModel, messages: chatMessages };
+
+    const data = await safeFetchJson(providerCfg.baseUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(body),
+    });
+
+    const answer = data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+    if (!answer) throw new Error("AI tidak mengembalikan jawaban. Coba lagi.");
+    return answer.trim();
+  }
+
+  /* ---- Provider: Anthropic (Claude, native Messages API) ---- */
+  async function callAnthropic(providerCfg, model, messages, apiKey) {
+    const anthMessages = messages.map((m) => ({
+      role: m.role === "ai" ? "assistant" : "user",
+      content: m.text,
+    }));
+
+    const body = {
+      model: model.apiModel,
+      max_tokens: 1024,
+      system: AI_CONFIG.SYSTEM_INSTRUCTION,
+      messages: anthMessages,
+    };
+
+    const data = await safeFetchJson(providerCfg.baseUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        // Diperlukan karena request dikirim langsung dari browser.
+        "anthropic-dangerous-direct-browser-access": "true",
+      },
+      body: JSON.stringify(body),
+    });
+
+    const block = data && data.content && data.content.find((c) => c.type === "text");
+    const answer = block && block.text;
+    if (!answer) throw new Error("AI tidak mengembalikan jawaban. Coba lagi.");
+    return answer.trim();
   }
 
   function setSendEnabled() {
