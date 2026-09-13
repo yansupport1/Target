@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Waktu Sehat</string>
+    <string name="accessibility_service_description">Mendeteksi aplikasi yang sedang dibuka untuk menerapkan batasan waktu dan aplikasi yang diatur orang tua.</string>
+</resources>
