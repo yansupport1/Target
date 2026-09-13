@@ -1,20 +1,31 @@
 /**
  * app.js
- * Logika utama Noyt AI: kelola obrolan, panggil AI API (config.js),
- * render pesan (dengan blok kode), dan UI interaktif.
+ * Logika utama Ryvexis AI: login (Google / tanpa akun), kelola obrolan,
+ * panggil AI API (config.js), render pesan bubble kanan/kiri, UI interaktif.
  */
 
 (function () {
   "use strict";
 
   /* ============ STATE ============ */
-  const STORAGE_KEY = "noyt_ai_chats_v1";
+  const STORAGE_KEY = "ryvexis_ai_chats_v1";
+  const AUTH_KEY = "ryvexis_ai_auth_v1";
+
   let chats = [];          // [{id, title, modelId, messages:[{role,text}]}]
   let activeChatId = null;
   let isSending = false;
+  let currentUser = null;  // {name, email, picture, guest}
 
   /* ============ ELEMENTS ============ */
   const el = {
+    // Login
+    loginView: document.getElementById("loginView"),
+    appView: document.getElementById("appView"),
+    googleBtnContainer: document.getElementById("googleBtnContainer"),
+    btnGuestLogin: document.getElementById("btnGuestLogin"),
+    clientIdWarning: document.getElementById("clientIdWarning"),
+
+    // Sidebar
     sidebar: document.getElementById("sidebar"),
     sidebarScrim: document.getElementById("sidebarScrim"),
     btnMenu: document.getElementById("btnMenu"),
@@ -22,6 +33,13 @@
     btnNewChat: document.getElementById("btnNewChat"),
     btnClearAll: document.getElementById("btnClearAll"),
     sidebarModelName: document.getElementById("sidebarModelName"),
+
+    // User profile
+    userAvatarImg: document.getElementById("userAvatarImg"),
+    userAvatarFallback: document.getElementById("userAvatarFallback"),
+    userNameLabel: document.getElementById("userNameLabel"),
+    userEmailLabel: document.getElementById("userEmailLabel"),
+    btnLogout: document.getElementById("btnLogout"),
 
     modelPickerBtn: document.getElementById("modelPickerBtn"),
     modelDropdown: document.getElementById("modelDropdown"),
@@ -44,6 +62,141 @@
     return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
   }
 
+  function escapeHtml(str) {
+    return str
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+  }
+
+  /* ============ AUTH: LOGIN GOOGLE / TANPA AKUN ============ */
+
+  function loadAuth() {
+    try {
+      const raw = localStorage.getItem(AUTH_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function saveAuth(user) {
+    localStorage.setItem(AUTH_KEY, JSON.stringify(user));
+  }
+
+  function clearAuth() {
+    localStorage.removeItem(AUTH_KEY);
+  }
+
+  // Decode payload JWT dari Google Identity Services (tanpa verifikasi
+  // signature — cukup untuk personalisasi UI di sisi klien / demo).
+  function decodeJwtPayload(token) {
+    const base64 = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+    const json = decodeURIComponent(
+      atob(base64)
+        .split("")
+        .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+        .join("")
+    );
+    return JSON.parse(json);
+  }
+
+  function handleGoogleCredential(response) {
+    try {
+      const payload = decodeJwtPayload(response.credential);
+      const user = {
+        name: payload.name || "Pengguna Google",
+        email: payload.email || "",
+        picture: payload.picture || "",
+        guest: false,
+      };
+      saveAuth(user);
+      enterApp(user);
+    } catch (e) {
+      alert("Gagal memproses login Google. Coba lagi.");
+    }
+  }
+
+  function showClientIdWarning() {
+    el.clientIdWarning.classList.add("show");
+  }
+
+  function isClientIdConfigured() {
+    const id = AI_CONFIG.GOOGLE_CLIENT_ID || "";
+    return id && id.indexOf("GANTI_DENGAN_") !== 0;
+  }
+
+  function initGoogleAuth(retries) {
+    retries = retries === undefined ? 8 : retries;
+
+    if (!isClientIdConfigured()) {
+      showClientIdWarning();
+      return;
+    }
+
+    if (window.google && google.accounts && google.accounts.id) {
+      google.accounts.id.initialize({
+        client_id: AI_CONFIG.GOOGLE_CLIENT_ID,
+        callback: handleGoogleCredential,
+        auto_select: false,
+      });
+      google.accounts.id.renderButton(el.googleBtnContainer, {
+        theme: "filled_black",
+        size: "large",
+        shape: "pill",
+        width: 296,
+        text: "continue_with",
+      });
+    } else if (retries > 0) {
+      setTimeout(() => initGoogleAuth(retries - 1), 300);
+    } else {
+      showClientIdWarning();
+    }
+  }
+
+  function enterApp(user) {
+    currentUser = user;
+    el.loginView.style.display = "none";
+    el.appView.classList.add("show");
+
+    el.userNameLabel.textContent = user.guest ? "Tamu" : user.name;
+    el.userEmailLabel.textContent = user.guest ? "Mode tanpa akun" : user.email;
+
+    if (user.picture) {
+      el.userAvatarImg.src = user.picture;
+      el.userAvatarImg.style.display = "block";
+      el.userAvatarFallback.style.display = "none";
+    } else {
+      el.userAvatarImg.style.display = "none";
+      el.userAvatarFallback.style.display = "block";
+    }
+
+    initApp();
+  }
+
+  function showLoginView() {
+    el.appView.classList.remove("show");
+    el.loginView.style.display = "flex";
+    initGoogleAuth();
+  }
+
+  el.btnGuestLogin.addEventListener("click", () => {
+    const guestUser = { name: "Tamu", email: "", picture: "", guest: true };
+    saveAuth(guestUser);
+    enterApp(guestUser);
+  });
+
+  el.btnLogout.addEventListener("click", () => {
+    if (!confirm("Keluar dari Ryvexis AI?")) return;
+    clearAuth();
+    if (window.google && google.accounts && google.accounts.id) {
+      google.accounts.id.disableAutoSelect();
+    }
+    currentUser = null;
+    showLoginView();
+  });
+
+  /* ============ PENYIMPANAN CHAT ============ */
   function saveChats() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(chats));
   }
@@ -69,19 +222,11 @@
     return chats.find((c) => c.id === activeChatId) || null;
   }
 
-  function escapeHtml(str) {
-    return str
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;");
-  }
-
   /* Render markdown ringan: blok kode ```, inline code, bold, list, paragraf */
   function renderMarkdown(raw) {
     const text = raw || "";
     const codeBlocks = [];
 
-    // Ambil semua blok kode ``` dulu supaya isinya tidak diparsing lebih lanjut
     let working = text.replace(/```(\w*)\n?([\s\S]*?)```/g, (_, lang, code) => {
       const idx = codeBlocks.length;
       codeBlocks.push({ lang: lang || "text", code: code.replace(/\n$/, "") });
@@ -89,13 +234,9 @@
     });
 
     working = escapeHtml(working);
-
-    // inline code
     working = working.replace(/`([^`]+)`/g, "<code>$1</code>");
-    // bold
     working = working.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
 
-    // list sederhana (baris diawali - atau *)
     const lines = working.split("\n");
     let html = "";
     let inList = false;
@@ -132,7 +273,6 @@
     if (inList) html += "</ul>";
     flushPara();
 
-    // Sisipkan kembali blok kode sebagai HTML utuh
     codeBlocks.forEach((block, idx) => {
       const safeCode = escapeHtml(block.code);
       const blockHtml = `
@@ -326,6 +466,16 @@
     scrollToBottom();
   }
 
+  function avatarInnerHtml(role) {
+    if (role === "user") {
+      if (currentUser && currentUser.picture) {
+        return `<img src="${escapeHtml(currentUser.picture)}" alt="" />`;
+      }
+      return '<i class="fa-regular fa-user"></i>';
+    }
+    return '<i class="fa-solid fa-hexagon-nodes"></i>';
+  }
+
   function appendMessageEl(role, text, opts) {
     opts = opts || {};
     const wrap = document.createElement("div");
@@ -333,15 +483,17 @@
 
     const avatar = document.createElement("div");
     avatar.className = "msg-avatar";
-    avatar.innerHTML =
-      role === "user" ? '<i class="fa-regular fa-user"></i>' : '<i class="fa-solid fa-hexagon-nodes"></i>';
+    avatar.innerHTML = avatarInnerHtml(role);
 
     const body = document.createElement("div");
     body.className = "msg-body";
 
     const roleLabel = document.createElement("div");
     roleLabel.className = "msg-role";
-    roleLabel.textContent = role === "user" ? "Kamu" : "Noyt AI";
+    roleLabel.textContent = role === "user" ? "Kamu" : "Ryvexis AI";
+
+    const bubble = document.createElement("div");
+    bubble.className = "msg-bubble";
 
     const content = document.createElement("div");
     content.className = "msg-content";
@@ -356,8 +508,9 @@
       content.innerHTML = html;
     }
 
+    bubble.appendChild(content);
     body.appendChild(roleLabel);
-    body.appendChild(content);
+    body.appendChild(bubble);
     wrap.appendChild(avatar);
     wrap.appendChild(body);
     el.messages.appendChild(wrap);
@@ -577,7 +730,7 @@
   /* ============ INPUT HANDLERS ============ */
   function autoResizeInput() {
     el.promptInput.style.height = "auto";
-    el.promptInput.style.height = Math.min(el.promptInput.scrollHeight, 180) + "px";
+    el.promptInput.style.height = Math.min(el.promptInput.scrollHeight, 200) + "px";
   }
 
   el.promptInput.addEventListener("input", () => {
@@ -614,7 +767,7 @@
   el.sidebarScrim.addEventListener("click", closeSidebarOnMobile);
 
   /* ============ INIT ============ */
-  function init() {
+  function initApp() {
     loadChats();
     if (chats.length) {
       activeChatId = chats.slice().sort((a, b) => b.updatedAt - a.updatedAt)[0].id;
@@ -622,6 +775,15 @@
     renderChatList();
     renderActiveChat();
     setSendEnabled();
+  }
+
+  function init() {
+    const savedUser = loadAuth();
+    if (savedUser) {
+      enterApp(savedUser);
+    } else {
+      showLoginView();
+    }
   }
 
   init();

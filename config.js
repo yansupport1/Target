@@ -18,6 +18,18 @@
 
 const AI_CONFIG = {
   // -------------------------------------------------
+  // LOGIN GOOGLE
+  // Ambil Client ID di https://console.cloud.google.com/apis/credentials
+  // (buat "OAuth client ID" tipe "Web application", lalu tambahkan domain
+  // tempat app ini di-hosting ke "Authorized JavaScript origins",
+  // contoh: https://ryvexis-ai.vercel.app).
+  // Selama masih "GANTI_DENGAN_GOOGLE_CLIENT_ID_KAMU", tombol Google
+  // Sign-In akan menampilkan pesan supaya diisi dulu, dan pengguna tetap
+  // bisa masuk lewat tombol "Lanjutkan tanpa akun".
+  // -------------------------------------------------
+  GOOGLE_CLIENT_ID: "GANTI_DENGAN_GOOGLE_CLIENT_ID_KAMU.apps.googleusercontent.com",
+
+  // -------------------------------------------------
   // API KEY per provider. Taruh key kamu di sini.
   // Kosongin ("") kalau provider itu belum dipakai.
   // Model bisa juga punya API key sendiri (lihat MODELS di bawah,
@@ -147,7 +159,7 @@ const AI_CONFIG = {
 
   // Instruksi sistem (persona) yang dikirim ke setiap model
   SYSTEM_INSTRUCTION:
-    "Kamu adalah Noyt AI, asisten AI yang ramah, jelas, dan to the point. " +
+    "Kamu adalah Ryvexis AI, asisten AI yang ramah, jelas, dan to the point. " +
     "Jawab dalam bahasa yang sama dengan pertanyaan pengguna. " +
     "Untuk pertanyaan teknis/koding, berikan contoh kode yang rapi memakai blok kode markdown.",
 };
