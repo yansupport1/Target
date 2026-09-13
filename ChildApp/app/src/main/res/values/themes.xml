@@ -1,4 +1,0 @@
-<resources>
-    <style name="Theme.ChildApp" parent="android:Theme.Material.Light.NoActionBar" />
-    <style name="Theme.ChildApp.Lock" parent="android:Theme.Material.NoActionBar.Fullscreen" />
-</resources>

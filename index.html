@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Noyt AI — Asisten AI Kamu</title>
+
+<!-- FontAwesome (ikon, tanpa emoji) -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+<!-- Font -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ======= SIDEBAR ======= -->
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <div class="brand-mark"><i class="fa-solid fa-hexagon-nodes"></i></div>
+      <div class="brand-text">
+        <span class="brand-name">Noyt AI</span>
+        <span class="brand-sub">Modern AI Workspace</span>
+      </div>
+    </div>
+
+    <button class="btn-new-chat" id="btnNewChat">
+      <i class="fa-solid fa-plus"></i>
+      <span>Obrolan Baru</span>
+    </button>
+
+    <div class="section-label">Riwayat</div>
+    <div class="chat-list" id="chatList"><!-- diisi JS --></div>
+
+    <div class="sidebar-footer">
+      <div class="model-current" id="sidebarModelInfo">
+        <i class="fa-solid fa-microchip"></i>
+        <span id="sidebarModelName">Coder Noyt 0.1</span>
+      </div>
+      <button class="icon-btn" id="btnClearAll" title="Hapus semua riwayat">
+        <i class="fa-solid fa-trash-can"></i>
+      </button>
+    </div>
+  </aside>
+
+  <div class="sidebar-scrim" id="sidebarScrim"></div>
+
+  <!-- ======= MAIN ======= -->
+  <main class="main">
+
+    <header class="topbar">
+      <button class="icon-btn only-mobile" id="btnMenu" title="Menu">
+        <i class="fa-solid fa-bars"></i>
+      </button>
+
+      <div class="model-picker">
+        <button class="model-picker-btn" id="modelPickerBtn">
+          <i class="fa-solid fa-brain"></i>
+          <span id="activeModelLabel">Coder Noyt 0.1</span>
+          <i class="fa-solid fa-chevron-down chev"></i>
+        </button>
+
+        <div class="model-dropdown" id="modelDropdown"><!-- diisi JS --></div>
+      </div>
+
+      <div class="topbar-actions">
+        <button class="icon-btn" id="btnRenameChat" title="Ganti nama obrolan">
+          <i class="fa-solid fa-pen"></i>
+        </button>
+        <button class="icon-btn" id="btnDeleteChat" title="Hapus obrolan ini">
+          <i class="fa-solid fa-trash"></i>
+        </button>
+      </div>
+    </header>
+
+    <section class="chat-area" id="chatArea">
+      <div class="empty-state" id="emptyState">
+        <div class="empty-glow"></div>
+        <i class="fa-solid fa-wand-magic-sparkles empty-icon"></i>
+        <h1>Mulai obrolan dengan Noyt AI</h1>
+        <p>Tanya apa saja — dari ngoding, ide, sampai penjelasan konsep rumit.</p>
+
+        <div class="suggestions" id="suggestions">
+          <button class="suggestion-card">
+            <i class="fa-solid fa-code"></i>
+            <span>Buatkan fungsi JavaScript untuk validasi email</span>
+          </button>
+          <button class="suggestion-card">
+            <i class="fa-solid fa-lightbulb"></i>
+            <span>Jelaskan cara kerja async/await</span>
+          </button>
+          <button class="suggestion-card">
+            <i class="fa-solid fa-bug"></i>
+            <span>Bantu aku debug error di kode</span>
+          </button>
+          <button class="suggestion-card">
+            <i class="fa-solid fa-layer-group"></i>
+            <span>Rancang struktur database sederhana</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="messages" id="messages"><!-- diisi JS --></div>
+    </section>
+
+    <footer class="composer-wrap">
+      <div class="composer">
+        <textarea
+          id="promptInput"
+          class="composer-input"
+          placeholder="Kirim pesan ke Noyt AI..."
+          rows="1"
+        ></textarea>
+
+        <div class="composer-actions">
+          <span class="composer-hint" id="composerHint">Enter untuk kirim · Shift+Enter baris baru</span>
+          <button class="btn-send" id="btnSend" title="Kirim">
+            <i class="fa-solid fa-arrow-up"></i>
+          </button>
+        </div>
+      </div>
+      <div class="composer-footnote">
+        Noyt AI bisa saja salah. Periksa kembali informasi penting.
+      </div>
+    </footer>
+
+  </main>
+</div>
+
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
