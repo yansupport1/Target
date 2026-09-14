@@ -33,7 +33,7 @@ const AI_CONFIG = {
   FIREBASE_CONFIG: {
     apiKey: "AIzaSyAirO8vLQA6Z_JMDHFYndkLxgrsh84NrGk",
     authDomain: "my-ai-f857a.firebaseapp.com",
-    databaseURL: "GANTI_DENGAN_DATABASE_URL_KAMU",
+    databaseURL: "https://my-ai-f857a-default-rtdb.firebaseio.com/",
     projectId: "my-ai-f857a",
     storageBucket: "my-ai-f857a.firebasestorage.app",
     messagingSenderId: "258485806014",
@@ -48,7 +48,10 @@ const AI_CONFIG = {
   // field "apiKey") kalau mau override key default provider-nya.
   // -------------------------------------------------
   PROVIDER_KEYS: {
-    gemini: "AIzaSyDjeCLygb7hyGGDhkNWx_RmiRluaVgqmqk",
+    // API key sebelumnya ke-flag "leaked" oleh Google karena sempat
+    // ter-expose publik. Generate key BARU di https://aistudio.google.com/apikey
+    // lalu tempel di bawah ini.
+    gemini: "AQ.Ab8RN6L8RzZ8YL7Hnkeo0cyT6KuBC-dR7-xKlGwqUTX4S0hslA",
     openai: "",
     anthropic: "",
     groq: "",
