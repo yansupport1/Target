@@ -48,13 +48,14 @@ const AI_CONFIG = {
   // field "apiKey") kalau mau override key default provider-nya.
   // -------------------------------------------------
   PROVIDER_KEYS: {
-    gemini: "AQ.Ab8RN6KKXLljNlmXy-zW-h3osopAdUhi9HNWDy7fGb4pwHixfg",
-    openai: "",
-    anthropic: "",
-    groq: "",
-    openrouter: "",
-    deepseek: "",
-  },
+  gemini: process.env.GEMINI_API_KEY || "AQ.Ab8RN6KKXLljNlmXy-zW-h3osopAdUhi9HNWDy7fGb4pwHixfg",
+  openai: process.env.OPENAI_API_KEY || "",
+  anthropic: process.env.ANTHROPIC_API_KEY || "",
+  groq: process.env.GROQ_API_KEY || "",
+  openrouter: process.env.OPENROUTER_API_KEY || "",
+  deepseek: process.env.DEEPSEEK_API_KEY || "",
+},
+  
 
   // -------------------------------------------------
   // Alamat endpoint tiap provider + tipe format request-nya.
