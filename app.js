@@ -1,31 +1,39 @@
 /**
  * app.js
- * Logika utama Ryvexis AI: login (Google / tanpa akun), kelola obrolan,
- * panggil AI API (config.js), render pesan bubble kanan/kiri, UI interaktif.
+ * Logika utama Ryvexis AI:
+ * - Login via Firebase Auth (Google popup / anonymous "tamu")
+ * - Chat log tersimpan realtime di Firebase Realtime Database
+ *   (fallback otomatis ke localStorage kalau databaseURL belum diisi)
+ * - Panggil AI API multi-provider (config.js)
+ * - Render pesan bubble kanan (user) / kiri (AI)
  */
 
 (function () {
   "use strict";
 
   /* ============ STATE ============ */
-  const STORAGE_KEY = "ryvexis_ai_chats_v1";
-  const AUTH_KEY = "ryvexis_ai_auth_v1";
+  const LOCAL_CHATS_KEY = "ryvexis_ai_chats_v1";
+  const LOCAL_AUTH_KEY = "ryvexis_ai_local_auth_v1";
 
-  let chats = [];          // [{id, title, modelId, messages:[{role,text}]}]
+  let chats = [];            // [{id, title, modelId, messages:[{role,text}], updatedAt}]
   let activeChatId = null;
   let isSending = false;
-  let currentUser = null;  // {name, email, picture, guest}
+  let currentUser = null;    // {name, email, picture, guest}
+
+  let auth = null;
+  let db = null;
+  let googleProvider = null;
+  let useFirebaseStorage = false;
+  let chatsRef = null;
 
   /* ============ ELEMENTS ============ */
   const el = {
-    // Login
     loginView: document.getElementById("loginView"),
     appView: document.getElementById("appView"),
-    googleBtnContainer: document.getElementById("googleBtnContainer"),
+    btnGoogleLogin: document.getElementById("btnGoogleLogin"),
     btnGuestLogin: document.getElementById("btnGuestLogin"),
-    clientIdWarning: document.getElementById("clientIdWarning"),
+    firebaseWarning: document.getElementById("firebaseWarning"),
 
-    // Sidebar
     sidebar: document.getElementById("sidebar"),
     sidebarScrim: document.getElementById("sidebarScrim"),
     btnMenu: document.getElementById("btnMenu"),
@@ -34,7 +42,9 @@
     btnClearAll: document.getElementById("btnClearAll"),
     sidebarModelName: document.getElementById("sidebarModelName"),
 
-    // User profile
+    syncDot: document.getElementById("syncDot"),
+    syncLabel: document.getElementById("syncLabel"),
+
     userAvatarImg: document.getElementById("userAvatarImg"),
     userAvatarFallback: document.getElementById("userAvatarFallback"),
     userNameLabel: document.getElementById("userNameLabel"),
@@ -63,95 +73,144 @@
   }
 
   function escapeHtml(str) {
-    return str
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;");
+    return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   }
 
-  /* ============ AUTH: LOGIN GOOGLE / TANPA AKUN ============ */
+  /* =========================================================
+     FIREBASE: init, auth (Google / tamu), status sinkron
+     ========================================================= */
 
-  function loadAuth() {
+  function isFirebaseFullyConfigured() {
+    const cfg = AI_CONFIG.FIREBASE_CONFIG || {};
+    const hasCore = cfg.apiKey && cfg.apiKey.indexOf("GANTI_DENGAN_") !== 0;
+    const hasDbUrl = cfg.databaseURL && cfg.databaseURL.indexOf("GANTI_DENGAN_") !== 0;
+    return { hasCore: !!hasCore, hasDbUrl: !!hasDbUrl };
+  }
+
+  function updateSyncStatus(connected) {
+    if (!el.syncDot) return;
+    if (connected) {
+      el.syncDot.classList.add("live");
+      el.syncLabel.textContent = "Realtime tersambung";
+    } else {
+      el.syncDot.classList.remove("live");
+      el.syncLabel.textContent = "Mode lokal";
+    }
+  }
+
+  function initFirebase() {
+    const status = isFirebaseFullyConfigured();
+
+    if (!status.hasCore) {
+      // Firebase sama sekali belum dikonfigurasi -> mode lokal penuh.
+      el.firebaseWarning.classList.add("show");
+      setupLocalOnlyAuth();
+      return;
+    }
+
+    firebase.initializeApp(AI_CONFIG.FIREBASE_CONFIG);
+    auth = firebase.auth();
+    googleProvider = new firebase.auth.GoogleAuthProvider();
+
+    if (status.hasDbUrl) {
+      db = firebase.database();
+    } else {
+      // Auth siap, tapi Realtime Database belum dikonfigurasi -> chat
+      // tetap disimpan lokal sampai databaseURL diisi.
+      el.firebaseWarning.classList.add("show");
+    }
+
+    auth.onAuthStateChanged((user) => {
+      if (user) {
+        currentUser = {
+          name: user.isAnonymous ? "Tamu" : (user.displayName || "Pengguna Google"),
+          email: user.isAnonymous ? "" : (user.email || ""),
+          picture: user.photoURL || "",
+          guest: user.isAnonymous,
+        };
+        enterApp(currentUser);
+
+        if (db) {
+          attachChatsListener(user.uid);
+        } else {
+          useFirebaseStorage = false;
+          loadChatsLocal();
+          renderChatList();
+          renderActiveChat();
+          updateSyncStatus(false);
+        }
+      } else {
+        detachChatsListener();
+        currentUser = null;
+        showLoginView();
+      }
+    });
+
+    el.btnGoogleLogin.addEventListener("click", () => {
+      auth.signInWithPopup(googleProvider).catch((err) => {
+        alert("Login Google gagal: " + err.message);
+      });
+    });
+    el.btnGuestLogin.addEventListener("click", () => {
+      auth.signInAnonymously().catch((err) => {
+        alert("Gagal masuk sebagai tamu: " + err.message);
+      });
+    });
+    el.btnLogout.addEventListener("click", () => {
+      if (!confirm("Keluar dari Ryvexis AI?")) return;
+      auth.signOut();
+    });
+  }
+
+  // Mode fallback total: dipakai kalau config.js Firebase belum diisi
+  // sama sekali. App tetap berfungsi penuh dengan localStorage.
+  function setupLocalOnlyAuth() {
+    el.btnGoogleLogin.classList.add("disabled");
+    el.btnGoogleLogin.disabled = true;
+    el.btnGoogleLogin.title = "Firebase belum dikonfigurasi di config.js";
+
+    const saved = loadLocalAuth();
+    if (saved) {
+      enterApp(saved);
+      loadChatsLocal();
+      renderChatList();
+      renderActiveChat();
+      updateSyncStatus(false);
+    } else {
+      showLoginView();
+    }
+
+    el.btnGuestLogin.addEventListener("click", () => {
+      const guestUser = { name: "Tamu", email: "", picture: "", guest: true };
+      saveLocalAuth(guestUser);
+      enterApp(guestUser);
+      loadChatsLocal();
+      renderChatList();
+      renderActiveChat();
+      updateSyncStatus(false);
+    });
+
+    el.btnLogout.addEventListener("click", () => {
+      if (!confirm("Keluar dari Ryvexis AI?")) return;
+      clearLocalAuth();
+      currentUser = null;
+      showLoginView();
+    });
+  }
+
+  function loadLocalAuth() {
     try {
-      const raw = localStorage.getItem(AUTH_KEY);
+      const raw = localStorage.getItem(LOCAL_AUTH_KEY);
       return raw ? JSON.parse(raw) : null;
     } catch (e) {
       return null;
     }
   }
-
-  function saveAuth(user) {
-    localStorage.setItem(AUTH_KEY, JSON.stringify(user));
+  function saveLocalAuth(user) {
+    localStorage.setItem(LOCAL_AUTH_KEY, JSON.stringify(user));
   }
-
-  function clearAuth() {
-    localStorage.removeItem(AUTH_KEY);
-  }
-
-  // Decode payload JWT dari Google Identity Services (tanpa verifikasi
-  // signature — cukup untuk personalisasi UI di sisi klien / demo).
-  function decodeJwtPayload(token) {
-    const base64 = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
-    const json = decodeURIComponent(
-      atob(base64)
-        .split("")
-        .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
-        .join("")
-    );
-    return JSON.parse(json);
-  }
-
-  function handleGoogleCredential(response) {
-    try {
-      const payload = decodeJwtPayload(response.credential);
-      const user = {
-        name: payload.name || "Pengguna Google",
-        email: payload.email || "",
-        picture: payload.picture || "",
-        guest: false,
-      };
-      saveAuth(user);
-      enterApp(user);
-    } catch (e) {
-      alert("Gagal memproses login Google. Coba lagi.");
-    }
-  }
-
-  function showClientIdWarning() {
-    el.clientIdWarning.classList.add("show");
-  }
-
-  function isClientIdConfigured() {
-    const id = AI_CONFIG.GOOGLE_CLIENT_ID || "";
-    return id && id.indexOf("GANTI_DENGAN_") !== 0;
-  }
-
-  function initGoogleAuth(retries) {
-    retries = retries === undefined ? 8 : retries;
-
-    if (!isClientIdConfigured()) {
-      showClientIdWarning();
-      return;
-    }
-
-    if (window.google && google.accounts && google.accounts.id) {
-      google.accounts.id.initialize({
-        client_id: AI_CONFIG.GOOGLE_CLIENT_ID,
-        callback: handleGoogleCredential,
-        auto_select: false,
-      });
-      google.accounts.id.renderButton(el.googleBtnContainer, {
-        theme: "filled_black",
-        size: "large",
-        shape: "pill",
-        width: 296,
-        text: "continue_with",
-      });
-    } else if (retries > 0) {
-      setTimeout(() => initGoogleAuth(retries - 1), 300);
-    } else {
-      showClientIdWarning();
-    }
+  function clearLocalAuth() {
+    localStorage.removeItem(LOCAL_AUTH_KEY);
   }
 
   function enterApp(user) {
@@ -171,42 +230,95 @@
       el.userAvatarFallback.style.display = "block";
     }
 
-    initApp();
+    activeChatId = null;
+    setSendEnabled();
   }
 
   function showLoginView() {
     el.appView.classList.remove("show");
     el.loginView.style.display = "flex";
-    initGoogleAuth();
+    chats = [];
+    activeChatId = null;
   }
 
-  el.btnGuestLogin.addEventListener("click", () => {
-    const guestUser = { name: "Tamu", email: "", picture: "", guest: true };
-    saveAuth(guestUser);
-    enterApp(guestUser);
-  });
+  /* =========================================================
+     REALTIME DATABASE: chat log per user
+     ========================================================= */
 
-  el.btnLogout.addEventListener("click", () => {
-    if (!confirm("Keluar dari Ryvexis AI?")) return;
-    clearAuth();
-    if (window.google && google.accounts && google.accounts.id) {
-      google.accounts.id.disableAutoSelect();
+  function attachChatsListener(uid) {
+    useFirebaseStorage = true;
+    chatsRef = db.ref("users/" + uid + "/chats");
+
+    chatsRef.on("value", (snap) => {
+      const val = snap.val() || {};
+      chats = Object.keys(val).map((id) => Object.assign({ id: id }, val[id]));
+
+      renderChatList();
+
+      const stillExists = chats.some((c) => c.id === activeChatId);
+      if (!stillExists) {
+        activeChatId = chats.length
+          ? chats.slice().sort((a, b) => b.updatedAt - a.updatedAt)[0].id
+          : null;
+      }
+      if (!isSending) renderActiveChat();
+    });
+
+    db.ref(".info/connected").on("value", (snap) => {
+      updateSyncStatus(snap.val() === true);
+    });
+  }
+
+  function detachChatsListener() {
+    if (chatsRef) chatsRef.off();
+    chatsRef = null;
+    useFirebaseStorage = false;
+    chats = [];
+  }
+
+  function persistChat(chat) {
+    if (useFirebaseStorage && chatsRef) {
+      const data = {
+        title: chat.title,
+        modelId: chat.modelId,
+        messages: chat.messages,
+        updatedAt: chat.updatedAt,
+      };
+      chatsRef.child(chat.id).set(data);
+    } else {
+      saveChatsLocal();
     }
-    currentUser = null;
-    showLoginView();
-  });
-
-  /* ============ PENYIMPANAN CHAT ============ */
-  function saveChats() {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(chats));
   }
 
-  function loadChats() {
+  function persistDeleteChat(chatId) {
+    if (useFirebaseStorage && chatsRef) {
+      chatsRef.child(chatId).remove();
+    } else {
+      saveChatsLocal();
+    }
+  }
+
+  function persistClearAll() {
+    if (useFirebaseStorage && chatsRef) {
+      chatsRef.remove();
+    } else {
+      chats = [];
+      saveChatsLocal();
+    }
+  }
+
+  function saveChatsLocal() {
+    localStorage.setItem(LOCAL_CHATS_KEY, JSON.stringify(chats));
+  }
+  function loadChatsLocal() {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
+      const raw = localStorage.getItem(LOCAL_CHATS_KEY);
       chats = raw ? JSON.parse(raw) : [];
     } catch (e) {
       chats = [];
+    }
+    if (chats.length) {
+      activeChatId = chats.slice().sort((a, b) => b.updatedAt - a.updatedAt)[0].id;
     }
   }
 
@@ -222,7 +334,7 @@
     return chats.find((c) => c.id === activeChatId) || null;
   }
 
-  /* Render markdown ringan: blok kode ```, inline code, bold, list, paragraf */
+  /* ============ MARKDOWN RINGAN (blok kode, list, bold) ============ */
   function renderMarkdown(raw) {
     const text = raw || "";
     const codeBlocks = [];
@@ -253,21 +365,12 @@
       const isListItem = /^\s*[-*]\s+/.test(line);
       if (isListItem) {
         flushPara();
-        if (!inList) {
-          html += "<ul>";
-          inList = true;
-        }
+        if (!inList) { html += "<ul>"; inList = true; }
         html += `<li>${line.replace(/^\s*[-*]\s+/, "")}</li>`;
       } else {
-        if (inList) {
-          html += "</ul>";
-          inList = false;
-        }
-        if (line.trim() === "") {
-          flushPara();
-        } else {
-          paraBuffer.push(line);
-        }
+        if (inList) { html += "</ul>"; inList = false; }
+        if (line.trim() === "") flushPara();
+        else paraBuffer.push(line);
       }
     });
     if (inList) html += "</ul>";
@@ -289,7 +392,7 @@
       html = html.replace(`%%CODEBLOCK_${idx}%%`, blockHtml);
     });
 
-    return { html, codeBlocks };
+    return { html };
   }
 
   /* ============ SIDEBAR: DAFTAR CHAT ============ */
@@ -345,11 +448,10 @@
   function setActiveModel(modelId) {
     const model = getModelById(modelId);
     let chat = getActiveChat();
-    if (!chat) {
-      chat = createChat();
-    }
+    if (!chat) chat = createChat();
     chat.modelId = model.id;
-    saveChats();
+    chat.updatedAt = Date.now();
+    persistChat(chat);
     updateModelLabels(model);
     renderModelDropdown();
   }
@@ -389,7 +491,7 @@
     };
     chats.push(chat);
     activeChatId = chat.id;
-    saveChats();
+    persistChat(chat);
     return chat;
   }
 
@@ -397,6 +499,7 @@
     activeChatId = id;
     renderChatList();
     renderActiveChat();
+    closeSidebarOnMobile();
   }
 
   function deleteActiveChat() {
@@ -405,7 +508,7 @@
     if (!confirm(`Hapus obrolan "${chat.title}"?`)) return;
     chats = chats.filter((c) => c.id !== chat.id);
     activeChatId = chats.length ? chats[0].id : null;
-    saveChats();
+    persistDeleteChat(chat.id);
     renderChatList();
     renderActiveChat();
   }
@@ -416,7 +519,8 @@
     const name = prompt("Nama obrolan baru:", chat.title);
     if (name && name.trim()) {
       chat.title = name.trim();
-      saveChats();
+      chat.updatedAt = Date.now();
+      persistChat(chat);
       renderChatList();
     }
   }
@@ -432,7 +536,7 @@
     if (!confirm("Hapus semua riwayat obrolan?")) return;
     chats = [];
     activeChatId = null;
-    saveChats();
+    persistClearAll();
     renderChatList();
     renderActiveChat();
   });
@@ -453,7 +557,7 @@
 
     updateModelLabels(getModelById(chat.modelId));
 
-    if (chat.messages.length === 0) {
+    if (!chat.messages || chat.messages.length === 0) {
       el.emptyState.style.display = "flex";
       el.messages.style.display = "none";
       return;
@@ -473,7 +577,7 @@
       }
       return '<i class="fa-regular fa-user"></i>';
     }
-    return '<i class="fa-solid fa-hexagon-nodes"></i>';
+    return '<img src="assets/logo-icon.png" alt="" />';
   }
 
   function appendMessageEl(role, text, opts) {
@@ -522,7 +626,6 @@
     el.chatArea.scrollTop = el.chatArea.scrollHeight;
   }
 
-  // Delegasi klik tombol "Salin" pada blok kode
   el.messages.addEventListener("click", (e) => {
     const btn = e.target.closest(".code-copy-btn");
     if (!btn) return;
@@ -543,6 +646,7 @@
 
     let chat = getActiveChat();
     if (!chat) chat = createChat();
+    if (!chat.messages) chat.messages = [];
 
     if (chat.messages.length === 0) {
       chat.title = trimmed.length > 38 ? trimmed.slice(0, 38) + "…" : trimmed;
@@ -550,7 +654,7 @@
 
     chat.messages.push({ role: "user", text: trimmed });
     chat.updatedAt = Date.now();
-    saveChats();
+    persistChat(chat);
     renderChatList();
 
     el.emptyState.style.display = "none";
@@ -573,7 +677,7 @@
 
       chat.messages.push({ role: "ai", text: replyText });
       chat.updatedAt = Date.now();
-      saveChats();
+      persistChat(chat);
 
       typingEl.remove();
       appendMessageEl("ai", replyText);
@@ -589,9 +693,9 @@
   }
 
   /**
-   * Dispatcher utama: baca provider dari model, lalu panggil
-   * fungsi yang sesuai. Nambah provider baru di config.js otomatis
-   * kepakai selama type-nya salah satu dari: gemini, openai-compatible,
+   * Dispatcher utama: baca provider dari model, lalu panggil fungsi
+   * yang sesuai. Nambah provider baru di config.js otomatis kepakai
+   * selama type-nya salah satu dari: gemini, openai-compatible,
    * anthropic. Type baru bisa ditambah dengan nambah case baru di bawah.
    */
   async function callAI(model, messages) {
@@ -606,14 +710,10 @@
     }
 
     switch (providerCfg.type) {
-      case "gemini":
-        return callGemini(providerCfg, model, messages, apiKey);
-      case "openai-compatible":
-        return callOpenAICompatible(providerCfg, model, messages, apiKey);
-      case "anthropic":
-        return callAnthropic(providerCfg, model, messages, apiKey);
-      default:
-        throw new Error(`Tipe provider "${providerCfg.type}" belum didukung di app.js.`);
+      case "gemini": return callGemini(providerCfg, model, messages, apiKey);
+      case "openai-compatible": return callOpenAICompatible(providerCfg, model, messages, apiKey);
+      case "anthropic": return callAnthropic(providerCfg, model, messages, apiKey);
+      default: throw new Error(`Tipe provider "${providerCfg.type}" belum didukung di app.js.`);
     }
   }
 
@@ -637,86 +737,57 @@
     return data;
   }
 
-  /* ---- Provider: Gemini (native) ---- */
   async function callGemini(providerCfg, model, messages, apiKey) {
     const url = `${providerCfg.baseUrl}/${model.apiModel}:generateContent?key=${apiKey}`;
-
     const contents = messages.map((m) => ({
       role: m.role === "ai" ? "model" : "user",
       parts: [{ text: m.text }],
     }));
-
     const body = {
       contents,
       systemInstruction: { parts: [{ text: AI_CONFIG.SYSTEM_INSTRUCTION }] },
     };
-
     const data = await safeFetchJson(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-
     const candidate = data && data.candidates && data.candidates[0];
     const parts = candidate && candidate.content && candidate.content.parts;
     const answer = parts && parts.map((p) => p.text || "").join("").trim();
-
     if (!answer) throw new Error("AI tidak mengembalikan jawaban. Coba lagi.");
     return answer;
   }
 
-  /* ---- Provider: OpenAI-compatible (OpenAI, Groq, OpenRouter, DeepSeek, dll) ---- */
   async function callOpenAICompatible(providerCfg, model, messages, apiKey) {
     const chatMessages = [
       { role: "system", content: AI_CONFIG.SYSTEM_INSTRUCTION },
-      ...messages.map((m) => ({
-        role: m.role === "ai" ? "assistant" : "user",
-        content: m.text,
-      })),
+      ...messages.map((m) => ({ role: m.role === "ai" ? "assistant" : "user", content: m.text })),
     ];
-
     const body = { model: model.apiModel, messages: chatMessages };
-
     const data = await safeFetchJson(providerCfg.baseUrl, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify(body),
     });
-
     const answer = data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
     if (!answer) throw new Error("AI tidak mengembalikan jawaban. Coba lagi.");
     return answer.trim();
   }
 
-  /* ---- Provider: Anthropic (Claude, native Messages API) ---- */
   async function callAnthropic(providerCfg, model, messages, apiKey) {
-    const anthMessages = messages.map((m) => ({
-      role: m.role === "ai" ? "assistant" : "user",
-      content: m.text,
-    }));
-
-    const body = {
-      model: model.apiModel,
-      max_tokens: 1024,
-      system: AI_CONFIG.SYSTEM_INSTRUCTION,
-      messages: anthMessages,
-    };
-
+    const anthMessages = messages.map((m) => ({ role: m.role === "ai" ? "assistant" : "user", content: m.text }));
+    const body = { model: model.apiModel, max_tokens: 1024, system: AI_CONFIG.SYSTEM_INSTRUCTION, messages: anthMessages };
     const data = await safeFetchJson(providerCfg.baseUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "x-api-key": apiKey,
         "anthropic-version": "2023-06-01",
-        // Diperlukan karena request dikirim langsung dari browser.
         "anthropic-dangerous-direct-browser-access": "true",
       },
       body: JSON.stringify(body),
     });
-
     const block = data && data.content && data.content.find((c) => c.type === "text");
     const answer = block && block.text;
     if (!answer) throw new Error("AI tidak mengembalikan jawaban. Coba lagi.");
@@ -737,21 +808,17 @@
     autoResizeInput();
     setSendEnabled();
   });
-
   el.promptInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       sendPrompt(el.promptInput.value);
     }
   });
-
   el.btnSend.addEventListener("click", () => sendPrompt(el.promptInput.value));
-
   el.suggestions.addEventListener("click", (e) => {
     const card = e.target.closest(".suggestion-card");
     if (!card) return;
-    const text = card.querySelector("span").textContent;
-    sendPrompt(text);
+    sendPrompt(card.querySelector("span").textContent);
   });
 
   /* ============ SIDEBAR MOBILE ============ */
@@ -767,24 +834,5 @@
   el.sidebarScrim.addEventListener("click", closeSidebarOnMobile);
 
   /* ============ INIT ============ */
-  function initApp() {
-    loadChats();
-    if (chats.length) {
-      activeChatId = chats.slice().sort((a, b) => b.updatedAt - a.updatedAt)[0].id;
-    }
-    renderChatList();
-    renderActiveChat();
-    setSendEnabled();
-  }
-
-  function init() {
-    const savedUser = loadAuth();
-    if (savedUser) {
-      enterApp(savedUser);
-    } else {
-      showLoginView();
-    }
-  }
-
-  init();
+  initFirebase();
 })();

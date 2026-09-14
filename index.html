@@ -4,14 +4,18 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Ryvexis AI — Asisten AI Kamu</title>
+<link rel="icon" type="image/png" href="assets/favicon.png" />
 
 <!-- FontAwesome (ikon, tanpa emoji) -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
 <!-- Font -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<!-- Google Identity Services (Login via Google) -->
-<script src="https://accounts.google.com/gsi/client" async defer></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<!-- Firebase (Login Google + Realtime Database) -->
+<script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-database-compat.js"></script>
 
 <link rel="stylesheet" href="style.css" />
 </head>
@@ -23,25 +27,37 @@
   <div class="login-blob login-blob-b"></div>
   <div class="login-blob login-blob-c"></div>
 
-  <div class="login-card">
-    <div class="brand-mark brand-mark-lg"><i class="fa-solid fa-hexagon-nodes"></i></div>
+  <div class="login-card glass-panel">
+    <div class="login-card-sheen"></div>
+    <img class="login-logo" src="assets/logo-icon.png" alt="Ryvexis AI" />
     <h1 class="login-title">Ryvexis AI</h1>
     <p class="login-sub">Masuk untuk mulai ngobrol dengan asisten AI kamu.</p>
 
-    <div class="google-btn-slot" id="googleBtnContainer"></div>
+    <button class="btn-google glass-pill" id="btnGoogleLogin">
+      <i class="fa-brands fa-google"></i>
+      <span>Masuk dengan Google</span>
+    </button>
 
     <div class="login-divider"><span>atau</span></div>
 
-    <button class="btn-guest" id="btnGuestLogin">
+    <button class="btn-guest glass-pill" id="btnGuestLogin">
       <i class="fa-regular fa-user"></i>
       <span>Lanjutkan tanpa akun</span>
     </button>
 
-    <p class="login-warning" id="clientIdWarning">
+    <p class="login-warning" id="firebaseWarning">
       <i class="fa-solid fa-triangle-exclamation"></i>
-      Login Google belum dikonfigurasi — isi <code>GOOGLE_CLIENT_ID</code> di <code>config.js</code>.
-      Untuk sekarang, pakai "Lanjutkan tanpa akun".
+      <span>
+        Firebase belum lengkap dikonfigurasi (<code>databaseURL</code> di <code>config.js</code>) —
+        chat sementara disimpan lokal di perangkat ini. Login Google & sinkron cloud
+        aktif otomatis begitu dikonfigurasi.
+      </span>
     </p>
+
+    <div class="login-footnote">
+      <i class="fa-solid fa-bolt"></i>
+      <span>Powered by Firebase Realtime Database</span>
+    </div>
   </div>
 </div>
 
@@ -49,16 +65,19 @@
 <div class="app" id="appView">
 
   <!-- ======= SIDEBAR ======= -->
-  <aside class="sidebar" id="sidebar">
+  <aside class="sidebar glass-panel" id="sidebar">
     <div class="brand">
-      <div class="brand-mark"><i class="fa-solid fa-hexagon-nodes"></i></div>
+      <img class="brand-mark" src="assets/logo-icon.png" alt="Ryvexis AI" />
       <div class="brand-text">
         <span class="brand-name">Ryvexis AI</span>
-        <span class="brand-sub">Modern AI Workspace</span>
+        <span class="sync-row">
+          <span class="sync-dot" id="syncDot"></span>
+          <span id="syncLabel">Mode lokal</span>
+        </span>
       </div>
     </div>
 
-    <button class="btn-new-chat" id="btnNewChat">
+    <button class="btn-new-chat glass-pill" id="btnNewChat">
       <i class="fa-solid fa-plus"></i>
       <span>Obrolan Baru</span>
     </button>
@@ -76,7 +95,7 @@
       </button>
     </div>
 
-    <div class="user-profile" id="userProfile">
+    <div class="user-profile">
       <div class="user-avatar" id="userAvatarWrap">
         <img id="userAvatarImg" alt="" style="display:none" />
         <i class="fa-solid fa-user" id="userAvatarFallback"></i>
@@ -96,19 +115,19 @@
   <!-- ======= MAIN ======= -->
   <main class="main">
 
-    <header class="topbar">
+    <header class="topbar glass-panel">
       <button class="icon-btn only-mobile" id="btnMenu" title="Menu">
         <i class="fa-solid fa-bars"></i>
       </button>
 
       <div class="model-picker">
-        <button class="model-picker-btn" id="modelPickerBtn">
+        <button class="model-picker-btn glass-pill" id="modelPickerBtn">
           <i class="fa-solid fa-brain"></i>
           <span id="activeModelLabel">Coder Noyt 0.1</span>
           <i class="fa-solid fa-chevron-down chev"></i>
         </button>
 
-        <div class="model-dropdown" id="modelDropdown"><!-- diisi JS --></div>
+        <div class="model-dropdown glass-panel" id="modelDropdown"><!-- diisi JS --></div>
       </div>
 
       <div class="topbar-actions">
@@ -124,24 +143,24 @@
     <section class="chat-area" id="chatArea">
       <div class="empty-state" id="emptyState">
         <div class="empty-glow"></div>
-        <i class="fa-solid fa-wand-magic-sparkles empty-icon"></i>
+        <img class="empty-logo" src="assets/logo-icon.png" alt="" />
         <h1>Mulai obrolan dengan Ryvexis AI</h1>
         <p>Tanya apa saja — dari ngoding, ide, sampai penjelasan konsep rumit.</p>
 
         <div class="suggestions" id="suggestions">
-          <button class="suggestion-card">
+          <button class="suggestion-card glass-pill">
             <i class="fa-solid fa-code"></i>
             <span>Buatkan fungsi JavaScript untuk validasi email</span>
           </button>
-          <button class="suggestion-card">
+          <button class="suggestion-card glass-pill">
             <i class="fa-solid fa-lightbulb"></i>
             <span>Jelaskan cara kerja async/await</span>
           </button>
-          <button class="suggestion-card">
+          <button class="suggestion-card glass-pill">
             <i class="fa-solid fa-bug"></i>
             <span>Bantu aku debug error di kode</span>
           </button>
-          <button class="suggestion-card">
+          <button class="suggestion-card glass-pill">
             <i class="fa-solid fa-layer-group"></i>
             <span>Rancang struktur database sederhana</span>
           </button>
@@ -152,7 +171,7 @@
     </section>
 
     <footer class="composer-wrap">
-      <div class="composer">
+      <div class="composer glass-panel">
         <textarea
           id="promptInput"
           class="composer-input"

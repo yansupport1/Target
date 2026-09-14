@@ -1,36 +1,48 @@
 /**
  * config.js
  * ---------------------------------------------------
- * Semua pengaturan AI ada di sini. Support BANYAK provider
- * AI sekaligus (Gemini, OpenAI, Anthropic, Groq, OpenRouter,
- * DeepSeek, dll). Nambah model atau ganti API key tidak perlu
- * sentuh app.js / index.html sama sekali.
- *
- * CARA NAMBAH MODEL BARU (3 langkah):
- * 1. Kalau providernya belum ada di PROVIDER_KEYS, isi key-nya di sana.
- * 2. Kalau providernya provider baru & belum ada di PROVIDERS, tambah
- *    baris baru (baseUrl + type). Provider yang formatnya sama kayak
- *    OpenAI (Groq, OpenRouter, DeepSeek, dst) tinggal pakai
- *    type: "openai-compatible".
- * 3. Tambah objek model baru di array MODELS.
+ * Semua pengaturan ada di sini: Firebase (login + database realtime)
+ * dan daftar model AI. Nambah model atau ganti key TIDAK perlu
+ * sentuh app.js / index.html.
  * ---------------------------------------------------
  */
 
 const AI_CONFIG = {
   // -------------------------------------------------
-  // LOGIN GOOGLE
-  // Ambil Client ID di https://console.cloud.google.com/apis/credentials
-  // (buat "OAuth client ID" tipe "Web application", lalu tambahkan domain
-  // tempat app ini di-hosting ke "Authorized JavaScript origins",
-  // contoh: https://ryvexis-ai.vercel.app).
-  // Selama masih "GANTI_DENGAN_GOOGLE_CLIENT_ID_KAMU", tombol Google
-  // Sign-In akan menampilkan pesan supaya diisi dulu, dan pengguna tetap
-  // bisa masuk lewat tombol "Lanjutkan tanpa akun".
+  // FIREBASE (Login Google + Realtime Database)
+  // Konfigurasi ini didapat dari Firebase Console -> Project Settings.
   // -------------------------------------------------
-  GOOGLE_CLIENT_ID: "GANTI_DENGAN_GOOGLE_CLIENT_ID_KAMU.apps.googleusercontent.com",
+  //
+  // databaseURL WAJIB diisi manual (belum otomatis kedeteksi dari config
+  // di atas). Caranya:
+  //   1. Buka Firebase Console -> project ini -> menu "Realtime Database"
+  //   2. Klik "Create Database" kalau belum ada, pilih lokasi server
+  //   3. Setelah dibuat, salin URL yang tampil di bagian atas halaman
+  //      (bentuknya: https://NAMA-PROJECT-default-rtdb.REGION.firebasedatabase.app)
+  //   4. Tempel di bawah, gantikan placeholder-nya
+  //
+  // Selama databaseURL belum diisi, chat tetap jalan & tersimpan otomatis
+  // di penyimpanan lokal (localStorage) sebagai fallback — begitu
+  // databaseURL diisi, chat otomatis realtime & tersimpan di cloud.
+  //
+  // Juga jangan lupa aktifkan provider login di Firebase Console ->
+  // Authentication -> Sign-in method -> aktifkan "Google" dan "Anonymous".
+  // Lalu di Authentication -> Settings -> Authorized domains, tambahkan
+  // domain hosting kamu (mis. ryvexis-ai.vercel.app).
+  // -------------------------------------------------
+  FIREBASE_CONFIG: {
+    apiKey: "AIzaSyAirO8vLQA6Z_JMDHFYndkLxgrsh84NrGk",
+    authDomain: "my-ai-f857a.firebaseapp.com",
+    databaseURL: "GANTI_DENGAN_DATABASE_URL_KAMU",
+    projectId: "my-ai-f857a",
+    storageBucket: "my-ai-f857a.firebasestorage.app",
+    messagingSenderId: "258485806014",
+    appId: "1:258485806014:web:33f336e6c1def52e42cfef",
+    measurementId: "G-PF3HQVEKX6",
+  },
 
   // -------------------------------------------------
-  // API KEY per provider. Taruh key kamu di sini.
+  // API KEY per provider AI. Taruh key kamu di sini.
   // Kosongin ("") kalau provider itu belum dipakai.
   // Model bisa juga punya API key sendiri (lihat MODELS di bawah,
   // field "apiKey") kalau mau override key default provider-nya.
@@ -94,6 +106,7 @@ const AI_CONFIG = {
   // "desc"     -> deskripsi singkat, tampil di bawah nama model.
   // "badge"    -> label kecil (mis. "Free", "Pro", "Beta").
   //
+  // NAMBAH MODEL BARU = tinggal tambah 1 objek baru di array ini.
   // Urutan array = urutan tampil di UI.
   // -------------------------------------------------
   MODELS: [
@@ -103,13 +116,12 @@ const AI_CONFIG = {
       provider: "gemini",
       apiModel: "gemini-3.6-flash",
       apiKey: "",
-      desc: "Model pertama Noyt AI, fokus ngoding & tanya jawab umum",
+      desc: "Model pertama Ryvexis AI, fokus ngoding & tanya jawab umum",
       badge: "Free",
     },
 
     // ===== CONTOH NAMBAH MODEL LAIN (hapus komentar & sesuaikan) =====
 
-    // Contoh model OpenAI:
     // {
     //   id: "gpt-mini",
     //   label: "GPT Mini",
@@ -119,8 +131,6 @@ const AI_CONFIG = {
     //   desc: "Model OpenAI ringan & cepat",
     //   badge: "Pro",
     // },
-
-    // Contoh model Anthropic (Claude):
     // {
     //   id: "claude-haiku",
     //   label: "Claude Haiku",
@@ -130,8 +140,6 @@ const AI_CONFIG = {
     //   desc: "Model Claude yang ringan & responsif",
     //   badge: "Pro",
     // },
-
-    // Contoh model dari provider OpenAI-compatible (Groq, gratis & ngebut):
     // {
     //   id: "groq-llama",
     //   label: "Llama Groq",
@@ -140,17 +148,6 @@ const AI_CONFIG = {
     //   apiKey: "",
     //   desc: "Llama 3.3 70B, jalan di Groq (super cepat)",
     //   badge: "Free",
-    // },
-
-    // Contoh model dengan API key khusus (override PROVIDER_KEYS):
-    // {
-    //   id: "noyt-vision-1",
-    //   label: "Noyt Vision 1.0",
-    //   provider: "gemini",
-    //   apiModel: "gemini-3.6-flash",
-    //   apiKey: "AIza...key-lain-punya-project-lain",
-    //   desc: "Model dengan kemampuan memahami gambar",
-    //   badge: "Beta",
     // },
   ],
 
@@ -161,5 +158,6 @@ const AI_CONFIG = {
   SYSTEM_INSTRUCTION:
     "Kamu adalah Ryvexis AI, asisten AI yang ramah, jelas, dan to the point. " +
     "Jawab dalam bahasa yang sama dengan pertanyaan pengguna. " +
-    "Untuk pertanyaan teknis/koding, berikan contoh kode yang rapi memakai blok kode markdown.",
+    "Untuk pertanyaan teknis/koding, berikan contoh kode yang rapi memakai blok kode markdown, " +
+    "dengan indentasi yang konsisten dan tanpa basa-basi berlebihan.",
 };
