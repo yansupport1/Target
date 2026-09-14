@@ -31,16 +31,15 @@ const AI_CONFIG = {
   // domain hosting kamu (mis. ryvexis-ai.vercel.app).
   // -------------------------------------------------
   FIREBASE_CONFIG: {
-    const firebaseConfig = {
-  apiKey: "AIzaSyAirO8vLQA6Z_JMDHFYndkLxgrsh84NrGk",
-  authDomain: "my-ai-f857a.firebaseapp.com",
-  databaseURL: "https://my-ai-f857a-default-rtdb.firebaseio.com",
-  projectId: "my-ai-f857a",
-  storageBucket: "my-ai-f857a.firebasestorage.app",
-  messagingSenderId: "258485806014",
-  appId: "1:258485806014:web:33f336e6c1def52e42cfef",
-  measurementId: "G-PF3HQVEKX6"
-}
+    apiKey: "AIzaSyAirO8vLQA6Z_JMDHFYndkLxgrsh84NrGk",
+    authDomain: "my-ai-f857a.firebaseapp.com",
+    databaseURL: "https://my-ai-f857a-default-rtdb.firebaseio.com/",
+    projectId: "my-ai-f857a",
+    storageBucket: "my-ai-f857a.firebasestorage.app",
+    messagingSenderId: "258485806014",
+    appId: "1:258485806014:web:33f336e6c1def52e42cfef",
+    measurementId: "G-PF3HQVEKX6",
+  },
 
   // -------------------------------------------------
   // API KEY per provider AI. Taruh key kamu di sini.
