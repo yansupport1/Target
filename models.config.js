@@ -82,7 +82,7 @@ module.exports = {
      apiModel: "llama-3.3-70b-versatile",
       desc: "model terbagus vexis",
       badge: "Gege",
-
+    },
     // ===== CONTOH NAMBAH MODEL LAIN (hapus komentar & sesuaikan) =====
     // {
     //   id: "gpt-mini",
