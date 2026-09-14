@@ -45,7 +45,7 @@
 }
 
 *{ box-sizing: border-box; }
-html, body{ height: 100%; }
+html, body{ height: 100%; height: 100dvh; }
 
 body{
   margin: 0;
@@ -113,23 +113,24 @@ body{
    Brand mark / logo
    ========================================================= */
 
-.brand-mark, .login-logo{
+.brand-mark{
   display: block;
   object-fit: contain;
   background: var(--glass-tint-strong);
   border: 1px solid var(--glass-border-strong);
   filter: drop-shadow(0 4px 14px rgba(109,61,240,0.35));
-}
-.brand-mark{
   width: 40px; height: 40px;
   border-radius: 13px;
   padding: 6px;
 }
 .login-logo{
-  width: 74px; height: 74px;
-  border-radius: 22px;
-  padding: 12px;
+  display: block;
+  object-fit: contain;
+  filter: drop-shadow(0 6px 20px rgba(109,61,240,0.45));
+  width: 84px; height: 84px;
   margin: 0 auto 16px;
+  background: none;
+  border: none;
 }
 
 /* =========================================================
@@ -285,6 +286,7 @@ body{
   display: none;
   grid-template-columns: 284px 1fr;
   height: 100vh;
+  height: 100dvh;
   width: 100vw;
   padding: 12px;
   gap: 12px;
@@ -724,7 +726,7 @@ body{
    Composer
    ========================================================= */
 
-.composer-wrap{ padding: 0 4px 4px; }
+.composer-wrap{ padding: 0 4px calc(4px + env(safe-area-inset-bottom)); }
 
 .composer{
   max-width: 800px;
@@ -804,7 +806,7 @@ body{
   .composer-hint{ display: none; }
   .topbar{ padding: 12px 14px; }
   .messages{ padding: 18px 14px 30px; }
-  .composer-wrap{ padding: 0 10px 12px; }
+  .composer-wrap{ padding: 0 10px calc(12px + env(safe-area-inset-bottom)); }
   .msg-body{ max-width: 84%; }
   .login-card{ padding: 34px 24px 26px; }
 }

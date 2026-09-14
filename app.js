@@ -120,6 +120,15 @@
       el.firebaseWarning.classList.add("show");
     }
 
+    // Tangani hasil login setelah redirect kembali dari Google.
+    // (signInWithRedirect dipakai alih-alih signInWithPopup karena popup
+    // sering diblokir / force-close di browser mobile seperti Chrome Android.)
+    auth.getRedirectResult().catch((err) => {
+      if (err && err.code) {
+        alert("Login Google gagal: " + err.message);
+      }
+    });
+
     auth.onAuthStateChanged((user) => {
       if (user) {
         currentUser = {
@@ -147,7 +156,7 @@
     });
 
     el.btnGoogleLogin.addEventListener("click", () => {
-      auth.signInWithPopup(googleProvider).catch((err) => {
+      auth.signInWithRedirect(googleProvider).catch((err) => {
         alert("Login Google gagal: " + err.message);
       });
     });

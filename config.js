@@ -33,7 +33,7 @@ const AI_CONFIG = {
   FIREBASE_CONFIG: {
     apiKey: "AIzaSyAirO8vLQA6Z_JMDHFYndkLxgrsh84NrGk",
     authDomain: "my-ai-f857a.firebaseapp.com",
-    databaseURL: "GANTI_DENGAN_DATABASE_URL_KAMU",
+    databaseURL: "https://my-ai-f857a-default-rtdb.firebaseio.com/",
     projectId: "my-ai-f857a",
     storageBucket: "my-ai-f857a.firebasestorage.app",
     messagingSenderId: "258485806014",
@@ -48,7 +48,7 @@ const AI_CONFIG = {
   // field "apiKey") kalau mau override key default provider-nya.
   // -------------------------------------------------
   PROVIDER_KEYS: {
-    gemini: "AIzaSyDjeCLygb7hyGGDhkNWx_RmiRluaVgqmqk",
+    gemini: "AQ.Ab8RN6IFOcE3YAEh01VOqtmThbJ0NvEfKgpdQZUOriwh5OxPuA",
     openai: "",
     anthropic: "",
     groq: "",
