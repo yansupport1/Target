@@ -1,0 +1,11 @@
+# Jangan commit environment/secret lokal
+.env
+.env.local
+.env*.local
+
+# Vercel
+.vercel
+
+# Sistem
+.DS_Store
+node_modules/
