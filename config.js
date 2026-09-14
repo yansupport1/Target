@@ -116,7 +116,7 @@ const AI_CONFIG = {
       provider: "gemini",
       apiModel: "gemini-3.6-flash",
       apiKey: "",
-      desc: "Model pertama Ryvexis AI, fokus ngoding & tanya jawab umum",
+      desc: "Model pertama Ryvexis AI, fokus ngoding & tanya jawab umum bukan worm gpt mpruy",
       badge: "Free",
     },
 
