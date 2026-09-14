@@ -48,7 +48,7 @@ const AI_CONFIG = {
   // field "apiKey") kalau mau override key default provider-nya.
   // -------------------------------------------------
   PROVIDER_KEYS: {
-  gemini: process.env.GEMINI_API_KEY || "AQ.Ab8RN6KKXLljNlmXy-zW-h3osopAdUhi9HNWDy7fGb4pwHixfg",
+  gemini: process.env.GEMINI_API_KEY || "AQ.Ab8RN6LPS1_dzZKS79i4cXMaQIwo0krr3x07HlnX-01rwLOIFA",
   openai: process.env.OPENAI_API_KEY || "",
   anthropic: process.env.ANTHROPIC_API_KEY || "",
   groq: process.env.GROQ_API_KEY || "",
